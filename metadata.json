@@ -1,0 +1,6 @@
+{
+  "name": "ArtImpressa Gráfica",
+  "description": "Website profissional e moderno para a gráfica ArtImpressa. Inclui galeria de fotos, integração com WhatsApp, formulário de contato por e-mail, navegação inteligente por âncoras e formulário de encomendas integrado com banco de dados Supabase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
