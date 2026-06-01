@@ -194,7 +194,8 @@ export default function App() {
       setOrders(fetched);
       setErrorOrders(null);
     } catch (err: any) {
-      setErrorOrders('Não foi possível obter a lista de encomendas do banco de dados.');
+      console.error('Falha ao carregar encomendas:', err);
+      setErrorOrders(err.message || 'Não foi possível obter a lista de encomendas do banco de dados.');
     } finally {
       setLoadingOrders(false);
     }
@@ -295,8 +296,9 @@ export default function App() {
         details: '',
       }));
       setUploadedFile(null);
-    } catch (err) {
-      alert('Falha ao processar encomenda no banco de dados. Tentando novamente...');
+    } catch (err: any) {
+      console.error('Falha ao registrar encomenda:', err);
+      alert(`Falha ao registrar encomenda no banco de dados: ${err.message || err}`);
     } finally {
       setIsSubmittingOrder(false);
     }
@@ -351,21 +353,29 @@ Por favor, poderiam prosseguir com o meu pedido? Obrigado!`;
 
   // Admin actions: Status Update & Delete
   const handleUpdateStatus = async (id: string, nextStatus: Order['status']) => {
-    const success = await updateOrderStatus(id, nextStatus);
-    if (success) {
-      loadOrdersData();
-    } else {
-      alert('Não foi possível atualizar o status no banco de dados.');
+    try {
+      const success = await updateOrderStatus(id, nextStatus);
+      if (success) {
+        loadOrdersData();
+      } else {
+        alert('Não foi possível atualizar o status no banco de dados.');
+      }
+    } catch (err: any) {
+      alert(`Erro ao atualizar status: ${err.message || err}`);
     }
   };
 
   const handleDeleteOrder = async (id: string) => {
     if (confirm('Deseja realmente remover esta encomenda do banco de dados?')) {
-      const success = await deleteOrder(id);
-      if (success) {
-        loadOrdersData();
-      } else {
-        alert('Falha ao excluir do banco de dados.');
+      try {
+        const success = await deleteOrder(id);
+        if (success) {
+          loadOrdersData();
+        } else {
+          alert('Falha ao excluir do banco de dados.');
+        }
+      } catch (err: any) {
+        alert(`Erro ao excluir: ${err.message || err}`);
       }
     }
   };
@@ -1224,10 +1234,12 @@ Por favor, poderiam prosseguir com o meu pedido? Obrigado!`;
                 <div className="text-xs text-slate-404 gap-1.5 flex flex-col pt-1">
                   <p className="font-medium text-slate-300">{dbStatus.message}</p>
                   
-                  {!dbStatus.isCloud && dbStatus.tableInstructions && (
+                  {dbStatus.tableInstructions && (
                     <div className="mt-2 space-y-2">
                       <p className="text-[10px] leading-relaxed text-[#94A3B8]">
-                        Para converter esse site em uma plataforma completamente integrada à nuvem, adicione os segredos do Supabase ao painel lateral do AI Studio. Abaixo está o SQL para criar as tabelas com um só clique:
+                        {dbStatus.isCloud 
+                          ? 'Execute este script SQL completo no SQL Editor do seu painel Supabase para certificar-se de que a tabela e permissões (RLS) estão criadas corretamente:'
+                          : 'Para converter esse site em uma plataforma completamente integrada à nuvem, adicione os segredos do Supabase ao painel lateral do AI Studio. Abaixo está o SQL para criar as tabelas:'}
                       </p>
                       
                       <div className="relative">

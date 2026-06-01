@@ -80,13 +80,13 @@ export async function fetchOrders(): Promise<Order[]> {
         .order('created_at', { ascending: false });
       
       if (error) {
-        console.error('Erro ao buscar dados do Supabase, usando localStorage como fallback:', error);
-        return getLocalStorageOrders();
+        console.error('Erro ao buscar dados do Supabase:', error);
+        throw new Error(`Erro no Supabase: ${error.message} (Código ${error.code}). Execute o script SQL no editor do Supabase para criar a tabela.`);
       }
       return data as Order[];
-    } catch (err) {
-      console.error('Erro crítico Supabase, usando localStorage:', err);
-      return getLocalStorageOrders();
+    } catch (err: any) {
+      console.error('Erro crítico Supabase:', err);
+      throw new Error(err.message || 'Falha crítica de conexão ao Supabase.');
     }
   } else {
     // Return sorted orders from localStorage (newest first)
@@ -134,19 +134,13 @@ export async function saveOrder(orderData: Omit<Order, 'id' | 'created_at' | 'st
         .single();
       
       if (error) {
-        console.error('Erro ao salvar no Supabase, salvando localmente:', error);
-        const localOrders = getLocalStorageOrders();
-        localOrders.push(newOrder);
-        setLocalStorageOrders(localOrders);
-        return newOrder;
+        console.error('Erro ao salvar no Supabase:', error);
+        throw new Error(`Erro ao salvar no Supabase: ${error.message} (Código ${error.code}). Verifique a criação da tabela ou políticas de RLS.`);
       }
       return data as Order;
-    } catch (err) {
-      console.error('Erro de conexão Supabase ao salvar, salvando localmente:', err);
-      const localOrders = getLocalStorageOrders();
-      localOrders.push(newOrder);
-      setLocalStorageOrders(localOrders);
-      return newOrder;
+    } catch (err: any) {
+      console.error('Erro de conexão Supabase ao salvar:', err);
+      throw new Error(err.message || 'Falha de conexão com o Supabase ao salvar.');
     }
   } else {
     const localOrders = getLocalStorageOrders();
@@ -166,12 +160,12 @@ export async function updateOrderStatus(id: string, newStatus: Order['status']):
         
       if (error) {
         console.error('Erro ao atualizar status no Supabase:', error);
-        return updateLocalStorageStatus(id, newStatus);
+        throw new Error(`Erro ao atualizar status no Supabase: ${error.message} (Código ${error.code})`);
       }
       return true;
-    } catch (err) {
-      console.error('Erro de conexão Supabase, atualizando localmente:', err);
-      return updateLocalStorageStatus(id, newStatus);
+    } catch (err: any) {
+      console.error('Erro de conexão Supabase ao atualizar:', err);
+      throw new Error(err.message || 'Falha ao atualizar status no Supabase.');
     }
   } else {
     return updateLocalStorageStatus(id, newStatus);
@@ -199,12 +193,12 @@ export async function deleteOrder(id: string): Promise<boolean> {
         
       if (error) {
         console.error('Erro ao deletar do Supabase:', error);
-        return deleteLocalStorageOrder(id);
+        throw new Error(`Erro ao deletar no Supabase: ${error.message} (Código ${error.code})`);
       }
       return true;
-    } catch (err) {
-      console.error('Erro de conexão Supabase ao deletar, removendo localmente:', err);
-      return deleteLocalStorageOrder(id);
+    } catch (err: any) {
+      console.error('Erro de conexão Supabase ao deletar:', err);
+      throw new Error(err.message || 'Falha ao excluir encomenda no Supabase.');
     }
   } else {
     return deleteLocalStorageOrder(id);
@@ -222,28 +216,32 @@ function deleteLocalStorageOrder(id: string): boolean {
 }
 
 export function getDatabaseStatus(): { isCloud: boolean; message: string; tableInstructions?: string } {
+  const instructions = `CREATE TABLE encomendas (
+  id TEXT PRIMARY KEY,
+  client_name TEXT NOT NULL,
+  client_email TEXT NOT NULL,
+  client_phone TEXT NOT NULL,
+  product_type TEXT NOT NULL,
+  quantity INTEGER NOT NULL,
+  details TEXT,
+  price NUMERIC,
+  status TEXT NOT NULL DEFAULT 'Pendente',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- DESABILITAR SEGURANÇA DE LINHA (RLS) PARA TESTES E CONEXÃO INSTANTÂNEA:
+ALTER TABLE encomendas DISABLE ROW LEVEL SECURITY;`;
+
   if (isSupabaseConfigured) {
     return {
       isCloud: true,
-      message: 'Conectado ao Banco de Dados Supabase (Nuvem)'
+      message: 'Conectado ao Banco de Dados Supabase (Nuvem)',
+      tableInstructions: instructions
     };
   }
   return {
     isCloud: false,
     message: 'Armazenamento Local Ativo (Vite Preview)',
-    tableInstructions: `Crie a tabela "encomendas" no console do seu Supabase com a seguinte estrutura SQL:
-    
-create table encomendas (
-  id text primary key,
-  client_name text not null,
-  client_email text not null,
-  client_phone text not null,
-  product_type text not null,
-  quantity integer not null,
-  details text,
-  price numeric,
-  status text not null default 'Pendente',
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);`
+    tableInstructions: instructions
   };
 }
