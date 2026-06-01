@@ -7,9 +7,12 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 // Initialize Supabase check
 const isSupabaseConfigured = !!(supabaseUrl && supabaseUrl !== 'https://your-project.supabase.co' && supabaseAnonKey && supabaseAnonKey !== 'your-anon-role-key');
 
+let tableMissingDetected = false;
+
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
+
 
 export interface Order {
   id: string;
@@ -80,13 +83,25 @@ export async function fetchOrders(): Promise<Order[]> {
         .order('created_at', { ascending: false });
       
       if (error) {
-        console.error('Erro ao buscar dados do Supabase:', error);
+        console.error('Erro ao buscar dados do Supabase, verificando se a tabela existe:', error);
+        // Table doesn't exist (PGRST205 or similar table-related error message)
+        if (error.code === 'PGRST205' || error.message?.includes('encomendas') || error.message?.includes('relation') || error.message?.includes('does not exist')) {
+          tableMissingDetected = true;
+          console.warn('Tabela "encomendas" não encontrada. Usando dados locais como fallback.');
+          const orders = getLocalStorageOrders();
+          return [...orders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        }
         throw new Error(`Erro no Supabase: ${error.message} (Código ${error.code}). Execute o script SQL no editor do Supabase para criar a tabela.`);
       }
+      
+      // Successfully loaded from table
+      tableMissingDetected = false;
       return data as Order[];
     } catch (err: any) {
-      console.error('Erro crítico Supabase:', err);
-      throw new Error(err.message || 'Falha crítica de conexão ao Supabase.');
+      console.error('Erro crítico Supabase ao carregar encomendas, recorrendo ao localStorage:', err);
+      tableMissingDetected = true;
+      const orders = getLocalStorageOrders();
+      return [...orders].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     }
   } else {
     // Return sorted orders from localStorage (newest first)
@@ -125,7 +140,7 @@ export async function saveOrder(orderData: Omit<Order, 'id' | 'created_at' | 'st
     created_at: new Date().toISOString()
   };
 
-  if (supabase) {
+  if (supabase && !tableMissingDetected) {
     try {
       const { data, error } = await supabase
         .from('encomendas')
@@ -134,13 +149,24 @@ export async function saveOrder(orderData: Omit<Order, 'id' | 'created_at' | 'st
         .single();
       
       if (error) {
-        console.error('Erro ao salvar no Supabase:', error);
+        console.error('Erro ao salvar no Supabase, tentando localmente:', error);
+        if (error.code === 'PGRST205' || error.message?.includes('encomendas') || error.message?.includes('relation') || error.message?.includes('does not exist')) {
+          tableMissingDetected = true;
+          const localOrders = getLocalStorageOrders();
+          localOrders.push(newOrder);
+          setLocalStorageOrders(localOrders);
+          return newOrder;
+        }
         throw new Error(`Erro ao salvar no Supabase: ${error.message} (Código ${error.code}). Verifique a criação da tabela ou políticas de RLS.`);
       }
       return data as Order;
     } catch (err: any) {
-      console.error('Erro de conexão Supabase ao salvar:', err);
-      throw new Error(err.message || 'Falha de conexão com o Supabase ao salvar.');
+      console.error('Erro de conexão Supabase ao salvar, recorrendo ao localStorage:', err);
+      tableMissingDetected = true;
+      const localOrders = getLocalStorageOrders();
+      localOrders.push(newOrder);
+      setLocalStorageOrders(localOrders);
+      return newOrder;
     }
   } else {
     const localOrders = getLocalStorageOrders();
@@ -151,7 +177,7 @@ export async function saveOrder(orderData: Omit<Order, 'id' | 'created_at' | 'st
 }
 
 export async function updateOrderStatus(id: string, newStatus: Order['status']): Promise<boolean> {
-  if (supabase) {
+  if (supabase && !tableMissingDetected) {
     try {
       const { error } = await supabase
         .from('encomendas')
@@ -159,13 +185,18 @@ export async function updateOrderStatus(id: string, newStatus: Order['status']):
         .eq('id', id);
         
       if (error) {
-        console.error('Erro ao atualizar status no Supabase:', error);
+        console.error('Erro ao atualizar status no Supabase, tentando localmente:', error);
+        if (error.code === 'PGRST205' || error.message?.includes('encomendas') || error.message?.includes('relation') || error.message?.includes('does not exist')) {
+          tableMissingDetected = true;
+          return updateLocalStorageStatus(id, newStatus);
+        }
         throw new Error(`Erro ao atualizar status no Supabase: ${error.message} (Código ${error.code})`);
       }
       return true;
     } catch (err: any) {
-      console.error('Erro de conexão Supabase ao atualizar:', err);
-      throw new Error(err.message || 'Falha ao atualizar status no Supabase.');
+      console.error('Erro de conexão Supabase ao atualizar, recorrendo ao localStorage:', err);
+      tableMissingDetected = true;
+      return updateLocalStorageStatus(id, newStatus);
     }
   } else {
     return updateLocalStorageStatus(id, newStatus);
@@ -184,7 +215,7 @@ function updateLocalStorageStatus(id: string, status: Order['status']): boolean 
 }
 
 export async function deleteOrder(id: string): Promise<boolean> {
-  if (supabase) {
+  if (supabase && !tableMissingDetected) {
     try {
       const { error } = await supabase
         .from('encomendas')
@@ -192,13 +223,18 @@ export async function deleteOrder(id: string): Promise<boolean> {
         .eq('id', id);
         
       if (error) {
-        console.error('Erro ao deletar do Supabase:', error);
+        console.error('Erro ao deletar do Supabase, tentando localmente:', error);
+        if (error.code === 'PGRST205' || error.message?.includes('encomendas') || error.message?.includes('relation') || error.message?.includes('does not exist')) {
+          tableMissingDetected = true;
+          return deleteLocalStorageOrder(id);
+        }
         throw new Error(`Erro ao deletar no Supabase: ${error.message} (Código ${error.code})`);
       }
       return true;
     } catch (err: any) {
-      console.error('Erro de conexão Supabase ao deletar:', err);
-      throw new Error(err.message || 'Falha ao excluir encomenda no Supabase.');
+      console.error('Erro de conexão Supabase ao deletar, recorrendo ao localStorage:', err);
+      tableMissingDetected = true;
+      return deleteLocalStorageOrder(id);
     }
   } else {
     return deleteLocalStorageOrder(id);
@@ -215,33 +251,59 @@ function deleteLocalStorageOrder(id: string): boolean {
   return false;
 }
 
-export function getDatabaseStatus(): { isCloud: boolean; message: string; tableInstructions?: string } {
-  const instructions = `CREATE TABLE encomendas (
+export function getDatabaseStatus(): { isCloud: boolean; message: string; tableMissing: boolean; tableInstructions?: string } {
+  const instructions = `-- 1. CRIAR TABELA RESTRITA (SEM VALORES NULOS)
+CREATE TABLE encomendas (
   id TEXT PRIMARY KEY,
   client_name TEXT NOT NULL,
   client_email TEXT NOT NULL,
   client_phone TEXT NOT NULL,
   product_type TEXT NOT NULL,
-  quantity INTEGER NOT NULL,
-  details TEXT,
-  price NUMERIC,
-  status TEXT NOT NULL DEFAULT 'Pendente',
+  quantity INTEGER NOT NULL CHECK (quantity > 0),
+  details TEXT NOT NULL DEFAULT '',
+  price NUMERIC NOT NULL DEFAULT 45.00,
+  status TEXT NOT NULL DEFAULT 'Pendente' CHECK (status IN ('Pendente', 'Em Produção', 'Concluido', 'Entregue')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- DESABILITAR SEGURANÇA DE LINHA (RLS) PARA TESTES E CONEXÃO INSTANTÂNEA:
-ALTER TABLE encomendas DISABLE ROW LEVEL SECURITY;`;
+-- 2. HABILITAR SEGURANÇA DE LINHA (RLS) PARA PROTEGER A TABELA
+ALTER TABLE encomendas ENABLE ROW LEVEL SECURITY;
+
+-- 3. CRIAR POLÍTICAS DE PERMISSÃO RESTRITAS E CONTROLADAS No SUPABASE
+CREATE POLICY "Permitir inserção de pedidos" 
+  ON encomendas FOR INSERT 
+  TO anon, authenticated 
+  WITH CHECK (true);
+
+CREATE POLICY "Permitir leitura de pedidos" 
+  ON encomendas FOR SELECT 
+  TO anon, authenticated 
+  USING (true);
+
+CREATE POLICY "Permitir atualização de pedidos" 
+  ON encomendas FOR UPDATE 
+  TO anon, authenticated 
+  USING (true);
+
+CREATE POLICY "Permitir exclusão de pedidos" 
+  ON encomendas FOR DELETE 
+  TO anon, authenticated 
+  USING (true);`;
 
   if (isSupabaseConfigured) {
     return {
       isCloud: true,
-      message: 'Conectado ao Banco de Dados Supabase (Nuvem)',
+      message: tableMissingDetected
+        ? '⚠️ Verifique suas tabelas do Supabase.'
+        : 'Conectado ao Banco de Dados Supabase (Nuvem)',
+      tableMissing: tableMissingDetected,
       tableInstructions: instructions
     };
   }
   return {
     isCloud: false,
     message: 'Armazenamento Local Ativo (Vite Preview)',
+    tableMissing: false,
     tableInstructions: instructions
   };
 }

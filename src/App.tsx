@@ -199,12 +199,12 @@ export default function App() {
       setErrorOrders(err.message || 'Não foi possível obter a lista de encomendas do banco de dados.');
     } finally {
       setLoadingOrders(false);
+      setDbStatus(getDatabaseStatus());
     }
   };
 
   useEffect(() => {
     loadOrdersData();
-    setDbStatus(getDatabaseStatus());
   }, []);
 
   // Order Quantity change syncing helper
@@ -1310,6 +1310,25 @@ Por favor, poderiam prosseguir com o meu pedido? Obrigado!`;
                 <span className="text-2xl font-black text-zinc-300">{stats.completed}</span>
               </div>
             </div>
+
+            {/* Database status banner if table is missing in Supabase */}
+            {dbStatus.tableMissing && (
+              <div className="mb-8 p-5 bg-amber-950/25 border border-amber-900/50 rounded-2xl flex gap-3 text-xs text-amber-300 shadow-xl" id="table-missing-alert-banner">
+                <AlertCircle className="w-5 h-5 shrink-0 text-amber-500 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="font-extrabold text-amber-200 block text-sm">⚠️ Modo Híbrido Ativo (Tabela do Supabase pendente)</span>
+                  <p className="leading-relaxed text-amber-400">
+                    Você configurou o Supabase com sucesso, mas a tabela <code className="bg-slate-950 px-1.5 py-0.5 rounded text-amber-300 font-mono text-[11px] border border-zinc-850">encomendas</code> ainda não foi criada no banco de dados.
+                  </p>
+                  <p className="leading-relaxed">
+                    O painel de controle entrou em <strong>Modo de Contingência Silenciosa</strong>: todas as suas visualizações, novos orçamentos, alterações de status e exclusões estão salvando em <strong>Armazenamento Local temporário (localStorage)</strong>.
+                  </p>
+                  <p className="leading-relaxed font-bold text-slate-200 pt-1">
+                    💡 Para persistir seus dados na nuvem: Copie e execute o script SQL de criação disponível no bloco de "Instruções do Banco de Dados" localizado na seção de Orçamentos acima.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Connection loading / empty screens */}
             {loadingOrders ? (
