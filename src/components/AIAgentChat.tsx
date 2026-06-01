@@ -59,17 +59,26 @@ export default function AIAgentChat({ orders }: AIAgentChatProps) {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        if (errorData.status === "needs_key") {
-          setNeedsApiKey(true);
-          const assistantReply: Message = {
-            role: "assistant",
-            content: "⚠️ **Chave API do Groq pendente de configuração.** Por favor, configure a variável `GROQ_API_KEY` nos **Segredos** do painel lateral do AI Studio para ativar as respostas de inteligência artificial!"
-          };
-          setMessages(prev => [...prev, assistantReply]);
-          return;
+        let errorMsg = `Erro ${response.status}`;
+        try {
+          // Clone response to safely read as text or JSON
+          const responseClone = response.clone();
+          const errorData = await responseClone.json();
+          if (errorData.status === "needs_key") {
+            setNeedsApiKey(true);
+            const assistantReply: Message = {
+              role: "assistant",
+              content: "⚠️ **Chave API do Groq pendente de configuração.** Por favor, configure a variável `GROQ_API_KEY` nos **Segredos** do painel lateral do AI Studio para ativar as respostas de inteligência artificial!"
+            };
+            setMessages(prev => [...prev, assistantReply]);
+            return;
+          }
+          errorMsg = errorData.error || errorData.message || errorMsg;
+        } catch {
+          const text = await response.text().catch(() => "");
+          errorMsg = text ? text.slice(0, 155) : `Servidor respondeu com código de status ${response.status}`;
         }
-        throw new Error(errorData.error || "Erro de comunicação com o servidor de IA.");
+        throw new Error(errorMsg);
       }
 
       const score = await response.json();

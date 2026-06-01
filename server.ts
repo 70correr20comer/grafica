@@ -26,10 +26,23 @@ async function startServer() {
         return res.status(400).json({ error: "Parâmetro 'messages' é obrigatório e deve ser um array." });
       }
 
-      // Convert orders into context to feed the Llama model
+      // Safe helper handlers to avoid server crashes (such as NUMERIC returned as string from database)
+      const formatPrice = (price: any) => {
+        if (price === undefined || price === null || price === "") return "Calculando...";
+        const num = typeof price === "number" ? price : parseFloat(price);
+        return isNaN(num) ? "Calculando..." : num.toFixed(2);
+      };
+
+      const formatDate = (dateStr: any) => {
+        if (!dateStr) return "N/A";
+        const date = new Date(dateStr);
+        return isNaN(date.getTime()) ? "N/A" : date.toLocaleDateString("pt-BR");
+      };
+
+      // Convert orders into context to feed the Llama model with robust mapping
       const formattedOrders = ordersContext && Array.isArray(ordersContext) && ordersContext.length > 0
         ? ordersContext.map((o: any) => 
-            `- Pedido [ID: ${o.id}] | Cliente: ${o.client_name} (Email: ${o.client_email}, Cel: ${o.client_phone}) | Produto: ${o.product_type} | Qtd: ${o.quantity} | Valor: R$ ${o.price ? o.price.toFixed(2) : "Calculando..."} | Status: ${o.status || 'Pendente'} | Cadastrado em: ${new Date(o.created_at).toLocaleDateString("pt-BR")}`
+            `- Pedido [ID: ${o.id || "N/A"}] | Cliente: ${o.client_name || "N/A"} (Email: ${o.client_email || "N/A"}, Cel: ${o.client_phone || "N/A"}) | Produto: ${o.product_type || "N/A"} | Qtd: ${o.quantity || 0} | Valor: R$ ${formatPrice(o.price)} | Status: ${o.status || 'Pendente'} | Cadastrado em: ${formatDate(o.created_at)}`
           ).join("\n")
         : "Nenhuma encomenda cadastrada até o momento no banco de dados.";
 
