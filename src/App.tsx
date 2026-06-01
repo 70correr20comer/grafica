@@ -34,6 +34,7 @@ import {
   getDatabaseStatus, 
   Order 
 } from './supabase';
+import AIAgentChat from './components/AIAgentChat';
 
 // Gallery Categories and Items
 const CATEGORIES = ['Todos', 'Papelaria', 'Comunicação Visual', 'Brindes', 'Embalagens'];
@@ -1678,6 +1679,9 @@ Por favor, poderiam prosseguir com o meu pedido? Obrigado!`;
           </span>
         </button>
       </div>
+
+      {/* AGENTE DE AJUDA COM INTELIGÊNCIA IA DA GROQ */}
+      <AIAgentChat orders={orders} />
 
     </div>
   );
